@@ -7,26 +7,23 @@ import re
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
-class AwsClientGenerator:
-    def __init__(self, name):
-        self.name = boto3.client(name)
+rds_client = boto3.client('rds')
+cloudwatch_client= boto3.client('cloudwatch')
+ce_client = boto3.client('ce')
+ssm_client = boto3.client('ssm', region_name="us-east-1")
 
-
-def Retrieve_Rds_Instances(): 
-    rds = boto3.client('rds')
-    rds_response = rds.describe_db_instances()
+def Retrieve_Rds_Instances(rds_client): 
+    rds_response = rds_client.describe_db_instances()
     db_instances = rds_response['DBInstances']
     db_instance_identifiers = [instance['DBInstanceIdentifier'] for instance in db_instances]
     return db_instance_identifiers
            
 
-def returnMaxRDSConnectionsFromCloudwatchData():
-    cw = boto3.client('cloudwatch')
+def returnMaxRDSConnectionsFromCloudwatchData(cloudwatch_client):
     listofdbinstances = Retrieve_Rds_Instances()
     rdsdbnamewithconnectioncount = []  
-    
     for dbinstancename in listofdbinstances:
-        cw_response = cw.get_metric_statistics(
+        cw_response = cloudwatch_client.get_metric_statistics(
             Namespace='AWS/RDS',
             MetricName='DatabaseConnections',
             StartTime='2023-06-01',
@@ -49,9 +46,8 @@ def returnMaxRDSConnectionsFromCloudwatchData():
     
     return rdsdbnamewithconnectioncount
 
-def returnMonthlyRDSCostfromCostExplorer():
-    ce = boto3.client('ce')
-    ce_response = ce.get_cost_and_usage(
+def returnMonthlyRDSCostfromCostExplorer(ce_client):
+    ce_response = ce_client.get_cost_and_usage(
         TimePeriod={
             'Start': '2023-06-01',
             'End': '2023-06-20'
@@ -90,22 +86,16 @@ def PrintRDSInstances():
         result = ""
     for name, count in RDS_Instances:
         result += f"The RDS Instance Name is {name} and the connection count maximum is {count}.\n"
-    
     return result
 
-
-
-
-def getSlackParametersSSM(key):
-    ssm = boto3.client('ssm', region_name="us-east-1")
-    response = ssm.get_parameter(Name=key, WithDecryption=True)
+def getSlackParametersSSM(key, ssm_client):
+    response = ssm_client.get_parameter(Name=key, WithDecryption=True)
     return response['Parameter']['Value']
 
 keybot = "slackbottoken"
 keyapp = "slackapptoken"
 
-
-app = App(token=getSlackParametersSSM(keybot), name="AWS")
+app = App(token=getSlackParametersSSM(keybot, ssm_client), name="AWS")
 
 logger = logging.getLogger(__name__)
 
@@ -142,10 +132,9 @@ def rds_shutdown_slack(message, say):
         ],
     )
 
-def stopRDSInstances(instancenames):
-    rds = boto3.client('rds')
+def stopRDSInstances(instancenames, rds_client):
     for instancename in instancenames:
-        rds.stop_db_instance(DBInstanceIdentifier=instancename)
+        rds_client.stop_db_instance(DBInstanceIdentifier=instancename)
 
 
 @app.action("button_click")
@@ -156,7 +145,7 @@ def action_button_click(body, ack, say):
 
 
 def main():
-    handler = SocketModeHandler(app, getSlackParametersSSM(keyapp))
+    handler = SocketModeHandler(app, getSlackParametersSSM(keyapp, ssm_client))
     handler.start()
     
 
