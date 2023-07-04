@@ -17,17 +17,17 @@ days_before = (date.today()-timedelta(days=30)).isoformat()
 
 
 
-def Retrieve_Rds_Instances(rds_client): 
+def retrieve_rds_instances(rds_client): 
     rds_response = rds_client.describe_db_instances()
     db_instances = rds_response['DBInstances']
     db_instance_identifiers = [instance['DBInstanceIdentifier'] for instance in db_instances]
     return db_instance_identifiers
            
 
-def returnMaxRDSConnectionsFromCloudwatchData(cloudwatch_client):
-    listofdbinstances = Retrieve_Rds_Instances()
+def return_maxrds_connections_from_cloudwatch(cloudwatch_client):
+    dbinstancelist = retrieve_rds_instances()
     rdsdbnamewithconnectioncount = []  
-    for dbinstancename in listofdbinstances:
+    for dbinstancename in dbinstancelist:
         cw_response = cloudwatch_client.get_metric_statistics(
             Namespace='AWS/RDS',
             MetricName='DatabaseConnections',
@@ -51,7 +51,7 @@ def returnMaxRDSConnectionsFromCloudwatchData(cloudwatch_client):
     
     return rdsdbnamewithconnectioncount
 
-def returnMonthlyRDSCostfromCostExplorer(ce_client):
+def return_monthly_rds_cost_costexplorer(ce_client):
     ce_response = ce_client.get_cost_and_usage(
         TimePeriod={
             'Start': days_before,
@@ -71,6 +71,7 @@ def returnMonthlyRDSCostfromCostExplorer(ce_client):
 
         ]
     )
+
     result = ce_response['ResultsByTime'][0]
     rds_groups = []
     for group in result['Groups']:
@@ -79,28 +80,28 @@ def returnMonthlyRDSCostfromCostExplorer(ce_client):
             amount = metrics['UnblendedCost']['Amount']
     return amount
 
-def PrintRDSInstances():
-    RDS_Instances = []
-    RDS_Instances = returnMaxRDSConnectionsFromCloudwatchData()
-    rds_cost = returnMonthlyRDSCostfromCostExplorer()
-    if not isinstance(RDS_Instances, list):
-        print("Error: Expected a list of tuples from returnMaxRDSConnectionsFromCloudwatchData()")
+def format_rds_to_string():
+    rds_instances = []
+    rds_instances = return_maxrds_connections_from_cloudwatch()
+    rds_cost = return_monthly_rds_cost_costexplorer()
+    if not isinstance(rds_instances, list):
+        print("Error: Expected a list of tuples from return_maxrds_connections_from_cloudwatch()")
         return  
 
-    for name, count in RDS_Instances:
+    for name, count in rds_instances:
         result = ""
-    for name, count in RDS_Instances:
+    for name, count in rds_instances:
         result += f"The RDS Instance Name is {name} and the connection count maximum is {count}.\n"
     return result
 
-def getSlackParametersSSM(key, ssm_client):
+def get_slack_parameters_ssm(key, ssm_client):
     response = ssm_client.get_parameter(Name=key, WithDecryption=True)
     return response['Parameter']['Value']
 
 keybot = "slackbottoken"
 keyapp = "slackapptoken"
 
-app = App(token=getSlackParametersSSM(keybot, ssm_client), name="AWS")
+app = App(token=get_slack_parameters_ssm(keybot, ssm_client), name="AWS")
 
 logger = logging.getLogger(__name__)
 
@@ -115,14 +116,14 @@ def sendRDSInstanceList(message, say):
 
     logger.info(f"Sent aws to user {user_id}")
 
-    say(text=PrintRDSInstances(), channel=dm_channel)
+    say(text=format_rds_to_string(), channel=dm_channel)
 
 
 
 @app.message(re.compile("(can you|rds) shutdown"))
 def rds_shutdown_slack(message, say):
 
-    rds_cost = returnMonthlyRDSCostfromCostExplorer()
+    rds_cost = return_maxrds_connections_from_cloudwatch()
     say(
         blocks=[
             {
@@ -150,7 +151,7 @@ def action_button_click(body, ack, say):
 
 
 def main():
-    handler = SocketModeHandler(app, getSlackParametersSSM(keyapp, ssm_client))
+    handler = SocketModeHandler(app, get_slack_parameters_ssm(keyapp, ssm_client))
     handler.start()
 
 if __name__ == "__main__":
