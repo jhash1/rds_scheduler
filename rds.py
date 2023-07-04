@@ -1,6 +1,6 @@
 import sys
 import boto3
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 import json
 import logging
 import re
@@ -11,6 +11,11 @@ rds_client = boto3.client('rds')
 cloudwatch_client= boto3.client('cloudwatch')
 ce_client = boto3.client('ce')
 ssm_client = boto3.client('ssm', region_name="us-east-1")
+
+current_date = date.today().isoformat()   
+days_before = (date.today()-timedelta(days=30)).isoformat()
+
+
 
 def Retrieve_Rds_Instances(rds_client): 
     rds_response = rds_client.describe_db_instances()
@@ -26,8 +31,8 @@ def returnMaxRDSConnectionsFromCloudwatchData(cloudwatch_client):
         cw_response = cloudwatch_client.get_metric_statistics(
             Namespace='AWS/RDS',
             MetricName='DatabaseConnections',
-            StartTime='2023-06-01',
-            EndTime=datetime.now().timestamp(),
+            StartTime=days_before,
+            EndTime=date.now().timestamp(),
             Period=3600,
             Statistics=['Maximum'],
             Dimensions=[
@@ -49,8 +54,8 @@ def returnMaxRDSConnectionsFromCloudwatchData(cloudwatch_client):
 def returnMonthlyRDSCostfromCostExplorer(ce_client):
     ce_response = ce_client.get_cost_and_usage(
         TimePeriod={
-            'Start': '2023-06-01',
-            'End': '2023-06-20'
+            'Start': days_before,
+            'End': current_date
         },
         Granularity='MONTHLY',
         Metrics=['UNBLENDED_COST'],
@@ -145,6 +150,8 @@ def action_button_click(body, ack, say):
 
 
 def main():
+    print(current_date)
+    print(days_before)
     handler = SocketModeHandler(app, getSlackParametersSSM(keyapp, ssm_client))
     handler.start()
     
