@@ -7,6 +7,11 @@ import re
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+class AwsClientGenerator:
+    def __init__(self, name):
+        self.name = boto3.client(name)
+
+
 def Retrieve_Rds_Instances(): 
     rds = boto3.client('rds')
     rds_response = rds.describe_db_instances()
@@ -104,9 +109,8 @@ app = App(token=getSlackParametersSSM(keybot), name="AWS")
 
 logger = logging.getLogger(__name__)
 
-
 @app.message(re.compile("^rds$"))
-def sayHello(message, say):
+def sendRDSInstanceList(message, say):
     channel_type = message["channel_type"]
     if channel_type != "im":
         return
@@ -121,8 +125,8 @@ def sayHello(message, say):
 
 
 @app.message(re.compile("(can you|rds) shutdown"))
-def message_hello(message, say):
-    
+def rds_shutdown_slack(message, say):
+
     rds_cost = returnMonthlyRDSCostfromCostExplorer()
     say(
         blocks=[
@@ -131,7 +135,7 @@ def message_hello(message, say):
                 "text": {"type": "mrkdwn", "text": f"Would you like to terminate these RDS instances, this action will save you ${rds_cost}"},
                 "accessory": {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "Click to Approve"},
+                    "text": {"type": "plain_text", "text": "Click to Approve and Stop These Instances"},
                     "action_id": "button_click"
                 }
             }
@@ -154,6 +158,7 @@ def action_button_click(body, ack, say):
 def main():
     handler = SocketModeHandler(app, getSlackParametersSSM(keyapp))
     handler.start()
+    
 
 
 if __name__ == "__main__":
