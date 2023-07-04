@@ -150,12 +150,8 @@ def action_button_click(body, ack, say):
 
 
 def main():
-    print(current_date)
-    print(days_before)
     handler = SocketModeHandler(app, getSlackParametersSSM(keyapp, ssm_client))
     handler.start()
-    
-
 
 if __name__ == "__main__":
     main()
