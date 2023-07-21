@@ -8,10 +8,12 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 
+ssm_client = boto3.client('ssm', region_name="us-east-1")
+
 class AWSRDS:
     def __init__(self, region_name="us-east-1"):
         self.client = boto3.client("rds")
-
+    #can be reg func
     def __str__(self) -> str:
         rds_instances = []
         rds_instances = self.return_max_rds_connections_from_cloudwatch()
@@ -69,14 +71,12 @@ class AWSRDS:
 class AWSCostExplorer:
     def __init__(self, region_name="us-east-1"):
         self.client = boto3.client("ce")
-        self.days_before = days_before
-        self.current_date= current_date
     
-    def return_monthly_rds_cost_costexplorer(ce_client):
-        ce_response = ce_client.get_cost_and_usage(
+    def return_monthly_rds_cost_costexplorer(self):
+        ce_response = self.get_cost_and_usage(
         TimePeriod={
-            'Start': days_before,
-            'End': current_date
+            'Start': "days_before",
+            'End': "current_date"
         },
         Granularity='MONTHLY',
         Metrics=['UNBLENDED_COST'],
@@ -102,67 +102,60 @@ class AWSCostExplorer:
         return amount
     
 
-    class SlackIntegration(re,logging):
-       def __init__(self, region_name="us-east-1"):
-        self.client = boto3.client("ssm", region_name=region_name)
-        
 
-        def get_slack_parameters_ssm(key, ssm_client):
-            response = ssm_client.get_parameter(Name=key, WithDecryption=True)
-            return response['Parameter']['Value']
 
-        #keybot = "slackbottoken"
-        #keyapp = "slackapptoken"
+def get_slack_parameters_ssm(key, ssm_client):
+    response = ssm_client.get_parameter(Name=key, WithDecryption=True)
+    return response['Parameter']['Value']
+ 
 
-        app = App(token=get_slack_parameters_ssm("slackbottoken", self.ssm_client), name="AWS")
+    #app = App(token=get_slack_parameters_ssm(AWSSSM),key="slackbottoken")
 
-        logger = logging.getLogger(__name__)
+app = App(token=get_slack_parameters_ssm("slackbottoken", ssm_client))
 
-        @app.message(re.compile("^rds$"))
-        def rds_slack_instance_list(message, say):
-            channel_type = message["channel_type"]
-            if channel_type != "im":
-                return
-            
-            dm_channel = message["channel"]
-            user_id = message["user"]
+@app.message(re.compile("^rds$"))
+def rds_slack_instance_list(message, say):
+    channel_type = message["channel_type"]
+    if channel_type != "im":
+        return
+    
+    dm_channel = message["channel"]
+    user_id = message["user"]
 
-            logger.info(f"Sent aws to user {user_id}")
+    #logger.info(f"Sent aws to user {user_id}")
 
-            say(text=AWSRDS.format_rds_to_string(), channel=dm_channel)
+    say(text=AWSRDS(), channel=dm_channel)
 
 
 
-        @app.message(re.compile("(can you|rds) shutdown"))
-        def rds_shutdown_slack(message, say):
+@app.message(re.compile("(can you|rds) shutdown"))
+def rds_shutdown_slack(message, say):
 
-            rds_cost = AWSRDS.return_max_rds_connections_from_cloudwatch()
-            say(
-                blocks=[
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": f"Would you like to terminate these RDS instances, this action will save you ${rds_cost}"},
-                        "accessory": {
-                            "type": "button",
-                            "text": {"type": "plain_text", "text": "Click to Approve and Stop These Instances"},
-                            "action_id": "button_click"
-                        }
-                    }
-                ],
-            )
+    rds_cost = AWSRDS.return_max_rds_connections_from_cloudwatch()
+    say(
+        blocks=[
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"Would you like to terminate these RDS instances, this action will save you ${rds_cost}"},
+                "accessory": {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "Click to Approve and Stop These Instances"},
+                    "action_id": "button_click"
+                }
+            }
+        ],
+    )
 
-            @app.action("button_click")
-            def action_button_click(body, ack, say):
-                # Acknowledge the action
-                ack()
-                say(f"<@{body['user']['id']}> approved this action")
-
-
-            def main():
-                handler = SocketModeHandler(app, get_slack_parameters_ssm("slackapptoken", self.ssm_client))
-                handler.start()
-
-            if __name__ == "__main__":
-                main()
+@app.action("button_click")
+def action_button_click(body, ack, say):
+    # Acknowledge the action
+    ack()
+    say(f"<@{body['user']['id']}> approved this action")
 
 
+def main():
+    handler = SocketModeHandler(app, get_slack_parameters_ssm("slackapptoken", ssm_client))
+    handler.start()
+
+if __name__ == "__main__":
+    main()
