@@ -24,7 +24,7 @@ def retrieve_rds_instances(rds_client):
     return db_instance_identifiers
            
 
-def return_maxrds_connections_from_cloudwatch(cloudwatch_client):
+def return_max_rds_connections_from_cloudwatch(cloudwatch_client):
     dbinstancelist = retrieve_rds_instances()
     rdsdbnamewithconnectioncount = []  
     for dbinstancename in dbinstancelist:
@@ -82,7 +82,7 @@ def return_monthly_rds_cost_costexplorer(ce_client):
 
 def format_rds_to_string():
     rds_instances = []
-    rds_instances = return_maxrds_connections_from_cloudwatch()
+    rds_instances = return_max_rds_connections_from_cloudwatch()
     rds_cost = return_monthly_rds_cost_costexplorer()
     if not isinstance(rds_instances, list):
         print("Error: Expected a list of tuples from return_maxrds_connections_from_cloudwatch()")
@@ -101,12 +101,12 @@ def get_slack_parameters_ssm(key, ssm_client):
 keybot = "slackbottoken"
 keyapp = "slackapptoken"
 
-app = App(token=get_slack_parameters_ssm(keybot, ssm_client), name="AWS")
+app = App(token=get_slack_parameters_ssm(keybot, ssm_client))
 
 logger = logging.getLogger(__name__)
 
 @app.message(re.compile("^rds$"))
-def sendRDSInstanceList(message, say):
+def rds_slack_instance_list(message, say):
     channel_type = message["channel_type"]
     if channel_type != "im":
         return
@@ -123,7 +123,7 @@ def sendRDSInstanceList(message, say):
 @app.message(re.compile("(can you|rds) shutdown"))
 def rds_shutdown_slack(message, say):
 
-    rds_cost = return_maxrds_connections_from_cloudwatch()
+    rds_cost = return_max_rds_connections_from_cloudwatch()
     say(
         blocks=[
             {
