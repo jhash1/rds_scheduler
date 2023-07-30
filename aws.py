@@ -13,20 +13,7 @@ ssm_client = boto3.client('ssm', region_name="us-east-1")
 class AWSRDS:
     def __init__(self, region_name="us-east-1"):
         self.client = boto3.client("rds")
-    #can be reg func
-    def __str__(self) -> str:
-        rds_instances = []
-        rds_instances = self.return_max_rds_connections_from_cloudwatch()
-        rds_cost = self.return_monthly_rds_cost_costexplorer()
-        if not isinstance(rds_instances, list):
-            print("Error: Expected a list of tuples from return_maxrds_connections_from_cloudwatch()")
-            return  
-
-        for name, count in rds_instances:
-            result = ""
-        for name, count in rds_instances:
-            result += f"The RDS Instance Name is {name} and the connection count maximum is {count}.\n"
-        return result
+        self.cwclient = boto3.client('cloudwatch')
 
     def retrieve_rds_instances(self): 
         rds_response = self.client.describe_db_instances()
@@ -35,17 +22,17 @@ class AWSRDS:
         return db_instance_identifiers
     
 
-    def return_max_rds_connections_from_cloudwatch(self,cloudwatch_client, date, timedelta):
-        dbinstancelist = self.client.retrieve_rds_instances()
+    def return_max_rds_connections_from_cloudwatch(self,cwclient, date, timedelta):
+        dbinstancelist = self.retrieve_rds_instances()
         rdsdbnamewithconnectioncount = []
         current_date = date.today().isoformat()   
         days_before = (date.today()-timedelta(days=30)).isoformat()  
         for dbinstancename in dbinstancelist:
-            cw_response = cloudwatch_client.get_metric_statistics(
+            cw_response = self.cwclient.get_metric_statistics(
                 Namespace='AWS/RDS',
                 MetricName='DatabaseConnections',
                 StartTime=days_before,
-                EndTime=date.now().timestamp(),
+                EndTime=current_date,
                 Period=3600,
                 Statistics=['Maximum'],
                 Dimensions=[
@@ -67,16 +54,33 @@ class AWSRDS:
     def stopRDSInstances(instancenames, self):
         for instancename in instancenames:
             self.stop_db_instance(DBInstanceIdentifier=instancename)
+
+    def format_rds_to_string(self):
+        ce_instance_class = AWSCostExplorer()
+        rds_instances = []
+        rds_instances = self.return_max_rds_connections_from_cloudwatch(self.cwclient, date, timedelta)
+        rds_cost = ce_instance_class.return_monthly_rds_cost_costexplorer()
+        if not isinstance(rds_instances, list):
+            print("Error: Expected a list of tuples from return_maxrds_connections_from_cloudwatch()")
+            return  
+
+        for name, count in rds_instances:
+            result = ""
+        for name, count in rds_instances:
+            result += f"The RDS Instance Name is {name} and the connection count maximum is {count}.\n"
+        return result
     
 class AWSCostExplorer:
     def __init__(self, region_name="us-east-1"):
         self.client = boto3.client("ce")
     
     def return_monthly_rds_cost_costexplorer(self):
-        ce_response = self.get_cost_and_usage(
+        ce_response = self.client.get_cost_and_usage(
         TimePeriod={
-            'Start': "days_before",
-            'End': "current_date"
+            #'Start': "days_before",
+            #'End': "current_date"
+            'Start': "2023-06-01",
+            'End': "2023-07-01"
         },
         Granularity='MONTHLY',
         Metrics=['UNBLENDED_COST'],
@@ -101,20 +105,16 @@ class AWSCostExplorer:
                 amount = metrics['UnblendedCost']['Amount']
         return amount
     
-
-
-
 def get_slack_parameters_ssm(key, ssm_client):
     response = ssm_client.get_parameter(Name=key, WithDecryption=True)
     return response['Parameter']['Value']
  
-
-    #app = App(token=get_slack_parameters_ssm(AWSSSM),key="slackbottoken")
-
 app = App(token=get_slack_parameters_ssm("slackbottoken", ssm_client))
 
+rds_class_instance = AWSRDS()
 @app.message(re.compile("^rds$"))
 def rds_slack_instance_list(message, say):
+    
     channel_type = message["channel_type"]
     if channel_type != "im":
         return
@@ -122,16 +122,12 @@ def rds_slack_instance_list(message, say):
     dm_channel = message["channel"]
     user_id = message["user"]
 
-    #logger.info(f"Sent aws to user {user_id}")
-
-    say(text=AWSRDS(), channel=dm_channel)
-
-
+    say(text=rds_class_instance.format_rds_to_string(), channel=dm_channel)
 
 @app.message(re.compile("(can you|rds) shutdown"))
 def rds_shutdown_slack(message, say):
-
-    rds_cost = AWSRDS.return_max_rds_connections_from_cloudwatch()
+    cw_class = AWSCostExplorer()
+    rds_cost = cw_class.return_monthly_rds_cost_costexplorer()
     say(
         blocks=[
             {
