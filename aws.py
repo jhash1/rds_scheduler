@@ -6,6 +6,12 @@ import logging
 import re
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+import yaml
+
+
+
+with open("config.yaml", "r") as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
 
 
 ssm_client = boto3.client('ssm', region_name="us-east-1")
@@ -63,7 +69,6 @@ class AWSRDS:
         if not isinstance(rds_instances, list):
             print("Error: Expected a list of tuples from return_maxrds_connections_from_cloudwatch()")
             return  
-
         for name, count in rds_instances:
             result = ""
         for name, count in rds_instances:
@@ -91,7 +96,7 @@ class AWSCostExplorer:
             },
             {
                 'Type': 'TAG',
-                'Key': 'env'
+                'Key': 'config[cost_explorer_tag_key]'
             }
 
         ]

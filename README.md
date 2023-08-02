@@ -1,13 +1,15 @@
 RDS Scheduler
 
-Title: RDS_Scheduler is a Python script designed to optimize the usage and cost of Amazon Web Services (AWS) Relational Database Service (RDS) during off-peak hours. RDS is a Platform-as-a-Service (PaaS) database resource offered by AWS, billed at an hourly level. However, companies using RDS often incur expensive charges during periods of low usage.
+Title: RDS_Scheduler is a program written in Python designed to optimize the usage and cost of Amazon Web Services (AWS) Relational Database Service (RDS) during off-peak hours. RDS is a Platform-as-a-Service (PaaS) database resource offered by AWS, billed at an hourly level. However, companies using RDS often incur expensive charges during periods of low usage. The RDS scheduler is used in conjuction with Slack to trigger a shutdown of selected instances.
 
 Prerequisites
 Before using RDS Scheduler, ensure that you have the following:
 Python installed on your local machine.
-The Python Boto3 library installed.
-AWS CLI configured with the necessary access credentials.
+The Python Boto3 library installed using 'pip install boto3'
+AWS CLI configured with the necessary access credentials 
+-https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html'
 Slack workspace with appropriate permissions and a designated channel for RDS Scheduler's notifications.
+
 
 Description:
 RDS Scheduler operates as a local Python script and uses your AWS credentials for access.
